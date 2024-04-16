@@ -1,5 +1,4 @@
-// COISAS A FAZER
-// COLOCAR TUDO NO GITHUB, COLOCAR ALGORITMOS NO CONTROLLERS E ENTÃO EXPORTAR FUNÇÕES PARA O ROUTES.JS
+
 
 require("dotenv").config();
 const express = require("express");

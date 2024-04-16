@@ -1,25 +1,24 @@
-const express = require("express");
-const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
-const User = require("./models/User.js");
+const User = require("../models/User.js");
+const jwt = require("jsonwebtoken");
+const geraSenha = require("./functions/geraSenha.js");
 
 exports.register = async (req, res) => {
   const { name, email, password, cpassword } = req.body;
   ///Validações
-  if (!name) {
-    return res.status(422).json({ msg: "O nome é Obrigatório" });
-  }
-  if (!email) {
-    return res.status(422).json({ msg: "O email é Obrigatório" });
-  }
-  if (!password) {
-    return res.status(422).json({ msg: "A Senha é Obrigatória" });
-  }
-  if (password !== cpassword) {
+  console.log(name, email, password, cpassword);
+  if (!name) return res.status(422).json({ msg: "O nome é Obrigatório" });
+
+  if (!email) return res.status(422).json({ msg: "O email é Obrigatório" });
+
+  if (!password) return res.status(422).json({ msg: "A Senha é Obrigatória" });
+
+  if (password !== cpassword)
     return res.status(422).json({ msg: "As Senhas  não conferem" });
-  }
+
   //Ver Se Usuário existe
   const userExists = await User.findOne({ email: email });
+  console.log(userExists);
   if (userExists) {
     return res.status(422).json({ msg: "Por Favor Utilize Outro E-mail" });
   }
@@ -51,7 +50,7 @@ exports.login = async (req, res) => {
   if (!password) {
     return res.status(422).json({ msg: "A Senha é Obrigatória" });
   }
-  //Ver se Usuário existe
+  //Ver se Usuário está no banco de dados, retorna um boolean
   const user = await User.findOne({ email: email });
   if (!user) {
     return res.status(422).json({ msg: "Usuário não encontrado" });
@@ -61,10 +60,17 @@ exports.login = async (req, res) => {
   if (!checkPassword) {
     return res.status(422).json({ msg: "Senha Inválida!" });
   }
+
   try {
+    //Erro está aqui
+    const mySecret = process.env["SECRET"];
+    //Cria o Json
+    const token = jwt.sign({ user: User.name }, mySecret, { expiresIn: 300 });
     res.status(200).json({
       msg: "Autenticação realizada com sucesso",
-      id: user._id,
+      //Retorna o Token
+      auth: true,
+      token: token,
     });
   } catch (error) {
     console.log(error);
@@ -73,26 +79,30 @@ exports.login = async (req, res) => {
       .json({ msg: "Erro No Servidor, Tente Novamente mais tarde" });
   }
 };
-exports.geradorSenhas = async (req, res) => {
-  const id = req.params.id;
-  try {
-    //Vê se o User existe
-    const user = await User.findById(id, "-password");
 
-    if (!user) {
-      return res.status(404).json({ msg: "Usuário não encontrado" });
+exports.logout = () => {
+  return res.json({ auth: false, token: null });
+};
+
+exports.geradorSenhas = async (req, res) => {
+  try {
+    const token = req.headers["authorization"];
+    if (!token) {
+      return res.status(401).json({ auth: false, message: "Sem Token" });
     }
+
+    jwt.verify(token, process.env.SECRET, function (err, decoded) {
+      if (err)
+        return res
+          .status(500)
+          .json({ auth: false, message: "Falha ao autenticar Token " });
+
+      // se tudo estiver ok, salva no request para uso posterior
+      req.userId = decoded.id;
+    });
+    let SenhaGerada = geraSenha();
+    res.json(SenhaGerada);
   } catch (err) {
     return res.status(404).json({ msg: "Id Inválido" });
   }
-
-  let senha = [];
-  const caracteres =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_-+={}[]|:;\"'<>,.?/";
-  for (c = 0; c < 13; c++) {
-    const indexCaractere = Math.floor(Math.random() * caracteres.length);
-    senha.push(caracteres[indexCaractere]);
-  }
-  senha = senha.join("");
-  res.json({ senha: senha });
 };
